@@ -21,7 +21,12 @@ foldername = rf'C:/Users/{str(getpass.getuser())}/AppData/Local/osu!'
 
 if not os.path.exists(foldername):
     print('Введите актуальную папку OSU!')
-    foldername = tkinter.filedialog.askdirectory()
+    try:
+      import tkinter
+      import tkinter.filedialog
+      foldername = tkinter.filedialog.askdirectory()
+    except:
+      foldername = input('>>> ')
 
 
 if not os.path.exists(foldername):
