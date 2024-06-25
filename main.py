@@ -1,76 +1,80 @@
 import os
 import shutil
+from pathlib import Path
 import tkinter
-import tkinter.filedialog
+from tkinter import filedialog
 import getpass
 
-if str(os.name) == "nt":
-  dir_pref = "\\"
-else:
-  dir_pref = "/"
+# Set up the working directory and necessary folders
+working_directory = Path.cwd()
+copy_to = working_directory / 'MusicParserOSU'
 
-working_directory = os.getcwd()
-f_w_name = 'MusicParserOSU'
-if not os.path.exists(f_w_name):
-   os.mkdir(f_w_name)
+copy_to.mkdir(exist_ok=True)
 
+# Determine the default osu! folder
+default_osu_folder = Path('C:/Users') / getpass.getuser() / 'AppData/Local/osu!'
 
+def get_osu_folder():
+    """Get the osu! folder from the user if the default does not exist."""
+    if default_osu_folder.exists():
+        return default_osu_folder
+    else:
+        print('Введите актуальную папку OSU!')
+        tkinter.Tk().withdraw()  # Hide the root window
+        foldername = Path(filedialog.askdirectory() or input('>>> '))
+        if not foldername.exists():
+            raise FileNotFoundError('[ERROR] Папка не существует!')
+        if foldername.name != 'osu!':
+            raise NotADirectoryError('[ERROR] Вы не ввели папку с расположением osu!')
+        return foldername
 
-copy_to = working_directory+dir_pref+f_w_name
-foldername = rf'C:/Users/{str(getpass.getuser())}/AppData/Local/osu!'
+def get_audio_filename(osu_file):
+    """Extract the audio filename from an osu! file."""
+    with osu_file.open('r', encoding='utf-8') as file:
+        for line in file:
+            if line.startswith('AudioFilename:'):
+                print(line.split(':', 1)[1].strip())
+                return line.split(':', 1)[1].strip()
+    raise ValueError('[ERROR] AudioFilename not found in the .osu file.')
 
-if not os.path.exists(foldername):
-    print('Введите актуальную папку OSU!')
-    try:
-      import tkinter
-      import tkinter.filedialog
-      foldername = tkinter.filedialog.askdirectory()
-    except:
-      foldername = input('>>> ')
-
-
-if not os.path.exists(foldername):
-    print('[ERROR] Папка не существует!')
-    raise Exception('Папка не существует!')
-
-
-if (foldername).split('/')[-1] != 'osu!':
-    print('[ERROR] Вы не ввели папку с расположением osu!')
-    raise Exception('Вы не ввели папку с расположением osu!')
-
+foldername = get_osu_folder()
 print(f'Будет сохранено: {copy_to}')
 
-sonds_folder = foldername+dir_pref+'Songs'
-if not os.path.exists(sonds_folder):
-    print('[ERROR] Папки Songs не существует!')
-    raise Exception('Папки Songs не существует!')
+# Set up the songs folder path
+songs_folder = foldername / 'Songs'
+if not songs_folder.exists():
+    raise FileNotFoundError('[ERROR] Папки Songs не существует!')
 
-os.chdir(sonds_folder)
+if not any(songs_folder.iterdir()):
+    raise Exception('[ERROR] Папка с музыкой пуста!')
 
-
-
-if len(os.listdir(os.getcwd())) == 0:
-    print('[ERROR] Папка с музыкой пуста!')
-    raise Exception('Папка с музыкой пуста!')
 err_ = []
 not_err = []
-for folder in os.listdir(os.getcwd()):
+
+def process_folder(folder):
+    """Process an individual folder to copy the audio file."""
     try:
-        os.chdir(folder)
-        if os.path.exists('audio.mp3'):
-            f_name = ''#.join(folder.split(' ')[1:])
-            i = 1
-            for d in folder.split(' ')[:]:
-                if i != 1:f_name = f'{f_name} {d}'
-                i = i + 1
-            f_name=f_name+'.mp3'
-            # print(f_name)
-            shutil.copyfile(os.getcwd()+dir_pref+'audio.mp3', copy_to+dir_pref+f_name)
-        os.chdir(sonds_folder)
+        osu_files = list(folder.glob('*.osu'))
+        if not osu_files:
+            raise FileNotFoundError(f'[ERROR] No .osu files found in folder: {folder}')
+        
+        audio_filename = get_audio_filename(osu_files[0])
+        audio_file = folder / audio_filename
+        if not audio_file.exists():
+            raise FileNotFoundError(f'[ERROR] Audio file "{audio_filename}" not found in folder: {folder}')
+        
+        f_name = ' '.join(folder.name.split(' ')[1:]) + Path(audio_filename).suffix
+        shutil.copyfile(audio_file, copy_to / f_name)
         not_err.append(folder)
-    except:
-        print(f'[ERROR] Folder: {folder}')
+    except Exception as e:
+        print(e)
         err_.append(folder)
 
+# Process each folder in the songs directory
+for folder in songs_folder.iterdir():
+    if folder.is_dir():
+        process_folder(folder)
 
-print(f'Успех!\nБыло обработано успешно: {len(not_err)}.\nC ошибкой: {len(err_)}.')
+input(f'''
+Успех!\nБыло обработано успешно: {len(not_err)}.\nC ошибкой: {len(err_)}.
+Для продолжения нажмите Enter или любую другую клавишу >>> ''')
